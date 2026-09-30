@@ -49,7 +49,15 @@
           <p class="hint">Жылды табу, ретімен қою және жұмбақ сұрақтарына уақыт автоматты түрде көбірек беріледі.</p>
           <label class="check"><input type="checkbox" name="shuffle" checked> Сұрақтарды араластыру</label>
           <label class="check" style="margin-top:-8px"><input type="checkbox" name="golden" checked> Соңғы сұрақ — «Алтын сұрақ» (ұпай ×2)</label>
-          <label class="check" style="margin-top:-8px"><input type="checkbox" name="teams"> Командалық ойын: 🐺 Көк бөрілер мен 🦅 Алтын қырандар</label>
+          <div class="field">Командалар
+            <div class="segmented" role="radiogroup" aria-label="Командалар саны">
+              <label><input type="radio" name="teams" value="0" checked>Жоқ</label>
+              <label><input type="radio" name="teams" value="2">2</label>
+              <label><input type="radio" name="teams" value="3">3</label>
+              <label><input type="radio" name="teams" value="4">4</label>
+            </div>
+            <p class="hint">🐺 Көк бөрілер · 🦅 Алтын қырандар · 🐎 Жүйрік тұлпарлар · 🐆 Ақ барыстар. Ойыншылар командаларға тең бөлінеді.</p>
+          </div>
           <button class="btn btn-block btn-lg" id="create-btn">Ойынды ашу</button>
           <p class="error" id="setup-error" role="alert"></p>
         </div>
@@ -110,8 +118,10 @@
       <p class="race-sub muted" id="final-sub"></p>
       <div id="final-teams"></div>
       <div class="podium" id="podium"></div>
+      <div class="awards" id="awards"></div>
       <ol class="rest" id="rest"></ol>
       <div class="center-row">
+        <button class="btn btn-ghost btn-lg" id="report-btn">📊 Сабақ талдауы</button>
         <button class="btn btn-lg" id="again-btn">Қайта ойнау</button>
         <button class="btn btn-ghost btn-lg" id="new-btn">Жаңа ойын</button>
       </div>
@@ -195,6 +205,25 @@
   </dialog>
 
   <!-- control from another device -->
+  <!-- teacher report -->
+  <dialog id="report">
+    <div class="dlg-head">
+      <h2 style="font-size:20px">📊 Сабақ талдауы</h2>
+      <form method="dialog"><button class="btn btn-ghost btn-small">Жабу</button></form>
+    </div>
+    <div class="dlg-body">
+      <p class="hint" style="margin-top:0">Сұрақтар ең қиынынан бастап. Пайыз — дұрыс жауап бергендер үлесі.</p>
+      <ol class="report-list" id="report-list"></ol>
+    </div>
+    <div class="dlg-foot">
+      <span class="muted" id="report-note" style="color:var(--ink-soft)"></span>
+      <span style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-small" id="report-quiz">Қиын сұрақтардан квиз</button>
+        <button class="btn btn-small" id="report-csv">Нәтижелер (Excel)</button>
+      </span>
+    </div>
+  </dialog>
+
   <dialog id="remote">
     <div class="dlg-head">
       <h2 style="font-size:20px">Телефон-пульт</h2>

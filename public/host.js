@@ -140,7 +140,7 @@ $('#setup-form').addEventListener('submit', e => {
   e.preventDefault();
   const f = new FormData(e.target);
   const [kind, id] = String(f.get('pack') || '').split(':');
-  const opts = { timeLimit: Number(f.get('time')), shuffle: f.get('shuffle') === 'on', golden: f.get('golden') === 'on', teams: f.get('teams') === 'on' };
+  const opts = { timeLimit: Number(f.get('time')), shuffle: f.get('shuffle') === 'on', golden: f.get('golden') === 'on', teams: Number(f.get('teams')) };
   if (kind === 'mine') opts.custom = myQuizzes().find(q => q.id === id);
   else opts.packId = id;
   const btn = $('#create-btn');
@@ -178,6 +178,7 @@ function renderLobby(s, fresh) {
       Sound.sfx('join');
       c = h('span', { class: p.team === undefined ? 'chip' : `chip team${p.team}`, 'data-id': p.id, title: p.team === undefined ? '' : s.teams[p.team].name },
         p.team === undefined ? '' : h('span', { 'aria-hidden': 'true' }, s.teams[p.team].icon),
+        h('span', { 'aria-hidden': 'true' }, p.avatar || ''),
         h('span', {}, p.name),
         h('button', { title: 'Ойыннан шығару', 'aria-label': `${p.name}: ойыннан шығару`, onclick: () => socket.emit('host:kick', p.id) }, '×'));
       chips.append(c);
@@ -313,7 +314,7 @@ function renderBoard(s, fresh) {
   const pos = x => `calc(${x.toFixed(4)} * (100% - 44px))`;
   race.replaceChildren(...top.map((p, i) => h('div', { class: i === 0 ? 'lane first' : 'lane' },
     h('span', { class: 'lane-rank' }, rankIn(s.players, p)),
-    h('span', { class: 'lane-name' }, p.name),
+    h('span', { class: 'lane-name' }, `${p.avatar || ''} ${p.name}`),
     h('div', { class: 'track' }, h('span', { class: 'horse', style: `left:${pos((p.score - p.gained) / max)}`, 'data-to': p.score / max, 'aria-hidden': 'true' }, '🐎')),
     h('span', { class: 'lane-score' }, p.score, p.gained ? h('span', { class: 'lane-gain' }, `+${p.gained}`) : ''))));
   if (!top.length) race.append(h('p', { class: 'muted', style: 'text-align:center' }, 'Ойыншылар жоқ'));
@@ -327,8 +328,9 @@ function renderBoard(s, fresh) {
 
 function teamBar(teams) {
   if (!teams) return '';
-  const lead = teams[0].score === teams[1].score ? -1 : teams[0].score > teams[1].score ? 0 : 1;
-  return h('div', { class: 'team-bar' }, ...teams.map((t, i) => h('div', { class: i === lead ? 'team-card lead' : 'team-card' },
+  const best = Math.max(...teams.map(t => t.score));
+  const lead = teams.filter(t => t.score === best).length === 1 ? teams.findIndex(t => t.score === best) : -1;
+  return h('div', { class: 'team-bar', style: `--n:${teams.length}` }, ...teams.map((t, i) => h('div', { class: i === lead ? 'team-card lead' : 'team-card' },
     h('span', { class: 'ic', 'aria-hidden': 'true' }, t.icon),
     h('span', {}, h('div', { class: 'nm' }, t.name), h('div', { class: 'sub' }, `${t.members} ойыншы · орташа ұпай`)),
     h('span', { class: 'sc' }, t.score))));
@@ -342,19 +344,62 @@ function renderFinal(s, fresh) {
   Sound.play('final');
   $('#final-sub').textContent = s.title;
   if (s.teams) {
-    const [a, b] = s.teams;
-    const win = a.score === b.score ? 'Командалар тең түсті!' : `Жеңімпаз команда: ${(a.score > b.score ? a : b).icon} ${(a.score > b.score ? a : b).name}`;
+    const best = Math.max(...s.teams.map(t => t.score));
+    const winners = s.teams.filter(t => t.score === best);
+    const win = winners.length > 1 ? `Тең түскен командалар: ${winners.map(t => `${t.icon} ${t.name}`).join(', ')}` : `Жеңімпаз команда: ${winners[0].icon} ${winners[0].name}`;
     $('#final-teams').replaceChildren(h('p', { class: 'winner-team' }, win), teamBar(s.teams));
   } else $('#final-teams').replaceChildren();
+  lastReport = s.report;
+  $('#awards').replaceChildren(...(s.report?.awards || []).map(a => h('div', { class: 'award' },
+    h('span', { class: 'aw-ic', 'aria-hidden': 'true' }, a.icon),
+    h('span', {}, h('div', { class: 'aw-t' }, a.title), h('div', { class: 'aw-n' }, `${a.avatar || ''} ${a.name} · ${a.value}`)))));
   $('#podium').replaceChildren(...list.slice(0, 3).map((p, i) => h('div', { class: `step p${i + 1}` },
     i === 0 && h('span', { class: 'crown', 'aria-hidden': 'true' }, '👑'),
-    h('div', { class: 'who' }, p.name),
+    h('div', { class: 'who' }, `${p.avatar || ''} ${p.name}`),
     h('div', { class: 'pts' }, `${p.score} ұпай`),
     h('div', { class: 'block' }, rankIn(s.players, p)))));
   $('#rest').replaceChildren(...list.slice(3).map(p =>
-    h('li', {}, h('span', {}, `${rankIn(s.players, p)}. ${p.name}`), h('b', {}, p.score))));
+    h('li', {}, h('span', {}, `${rankIn(s.players, p)}. ${p.avatar || ''} ${p.name}`), h('b', {}, p.score))));
   confetti(6000);
 }
+
+// ---------- teacher report ----------
+let lastReport = null;
+
+$('#report-btn').addEventListener('click', () => {
+  const r = lastReport;
+  if (!r) return;
+  $('#report-list').replaceChildren(...r.questions.map(q => h('li', { class: q.pct < 50 ? 'hard' : '' },
+    h('div', { class: 'rq-top' }, h('span', { class: 'rq-text' }, q.text), h('b', { class: 'rq-pct' }, `${q.pct}%`)),
+    h('div', { class: 'rq-bar' }, h('span', { style: `width:${q.pct}%` })))));
+  const hard = r.questions.filter(q => q.quiz && q.pct < 60);
+  $('#report-quiz').disabled = !hard.length;
+  $('#report-note').textContent = hard.length ? `${hard.length} қиын сұрақ (60%-дан аз) қайталауға дайын` : 'Қиын сұрақ жоқ — жарайсыздар!';
+  $('#report').showModal();
+});
+
+// The hardest plain questions become a new "my quiz" for a repeat round.
+$('#report-quiz').addEventListener('click', () => {
+  const hard = lastReport.questions.filter(q => q.quiz && q.pct < 60).map(q => q.quiz);
+  const id = Date.now().toString(36);
+  store.set(QUIZZES_KEY, [...myQuizzes(), { id, title: `Қайталау: ${state?.title || 'қиын сұрақтар'}`.slice(0, 60), questions: hard }]);
+  $('#report-note').textContent = '«Менің квизім» тізіміне сақталды ✓';
+  $('#report-quiz').disabled = true;
+});
+
+// CSV for Excel: UTF-8 BOM + semicolons, which Excel opens correctly in both Kazakh and Russian Windows locales.
+$('#report-csv').addEventListener('click', () => {
+  const r = lastReport;
+  const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const head = ['Орын', 'Ойыншы', 'Команда', 'Ұпай', 'Дұрыс', ...r.questions.map((_, i) => `С${i + 1}`)];
+  const byOrder = lastReport.results;
+  const rows = byOrder.map((p, i) => [i + 1, p.name, p.team, p.score, p.correct, ...p.answers.map(a => (a === null ? '' : a ? '+' : '−'))]);
+  const csv = '\ufeff' + [head, ...rows].map(row => row.map(cell).join(';')).join('\r\n');
+  const a = h('a', { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })), download: `baige-natizheler-${new Date().toISOString().slice(0, 10)}.csv` });
+  document.body.append(a);
+  a.click();
+  a.remove();
+});
 
 // ---------- controls ----------
 $('#start-btn').addEventListener('click', () => socket.emit('host:start'));
@@ -588,3 +633,29 @@ $('#ai-save').addEventListener('click', () => {
   renderPacks(`mine:${id}`);
   openEditor(id);
 });
+
+// ---------- fit to screen (PC / projector) ----------
+// If the current screen is taller than the window, scale it down (CSS zoom re-lays out, text stays sharp),
+// so the host never has to scroll. Phones keep normal scrolling.
+const mainEl = document.querySelector('main');
+let fitRaf = 0;
+function fitScreen() {
+  mainEl.style.zoom = '';
+  if (innerWidth < 900 || matchMedia('(pointer: coarse)').matches) return;
+  const avail = innerHeight - mainEl.getBoundingClientRect().top - 4;
+  let zoom = 1;
+  for (let i = 0; i < 4; i++) {
+    const height = mainEl.getBoundingClientRect().height;
+    if (height <= avail + 1) break;
+    zoom = Math.max(0.5, zoom * (avail / height));
+    mainEl.style.zoom = zoom.toFixed(3);
+  }
+}
+const scheduleFit = () => { cancelAnimationFrame(fitRaf); fitRaf = requestAnimationFrame(fitScreen); };
+addEventListener('resize', scheduleFit);
+document.addEventListener('load', e => { if (e.target.tagName === 'IMG') scheduleFit(); }, true);
+// Re-fit whenever the visible content changes (new screen, new question, clue opened, players joined...).
+// The countdown changes every frame and never changes the layout, so it is ignored.
+const inTimer = n => (n.nodeType === 1 ? n : n.parentElement)?.closest('#timer');
+new MutationObserver(muts => { if (muts.some(m => !inTimer(m.target))) scheduleFit(); })
+  .observe(mainEl, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });

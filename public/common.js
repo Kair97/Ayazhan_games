@@ -43,6 +43,12 @@ const SHAPES = [
   '<path d="M12 2 22 12 12 22 2 12z"/>',
 ];
 const SHAPE_NAMES = ['Күн', 'Ай', 'Жебе', 'Тау'];
+const AVATARS = ['🐺', '🦅', '🐎', '🐆', '🦌', '🐫', '🦉', '🐻'];
+const POWER_INFO = {
+  shield: { icon: '🛡️', name: 'Қалқан', hint: 'Қате жауап серияңды үзбейді' },
+  fifty: { icon: '✂️', name: '50/50', hint: 'Екі қате жауапты алып тастайды' },
+  double: { icon: '⚡', name: 'Екі есе', hint: 'Осы сұрақтың ұпайы ×2' },
+};
 function shape(i) {
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   s.setAttribute('viewBox', '0 0 24 24');

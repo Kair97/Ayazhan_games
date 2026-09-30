@@ -16,7 +16,13 @@ const MAX_PLAYERS = 200;
 const GRACE_MS = 600;            // network latency allowance after the timer hits zero
 const ROOM_TTL_MS = 3 * 3600e3;  // idle rooms are swept after 3 hours
 const MIN_TIME = { year: 25, order: 30, clues: 40, anagram: 30 }; // seconds; these types need thinking time whatever the host picked
-const TEAMS = [{ name: 'Көк бөрілер', icon: '🐺' }, { name: 'Алтын қырандар', icon: '🦅' }];
+const TEAMS = [
+  { name: 'Көк бөрілер', icon: '🐺' }, { name: 'Алтын қырандар', icon: '🦅' },
+  { name: 'Жүйрік тұлпарлар', icon: '🐎' }, { name: 'Ақ барыстар', icon: '🐆' },
+];
+const AVATARS = ['🐺', '🦅', '🐎', '🐆', '🦌', '🐫', '🦉', '🐻'];
+// Power-ups, earned for every 2 correct answers in a row (max 2 in hand), used before answering.
+const POWERS = ['shield', 'fifty', 'double'];
 
 const app = express();
 const server = http.createServer(app);
@@ -145,17 +151,48 @@ const answeredAll = room => {
 // Team score is the members' average, so a team with one extra player gets no advantage.
 function teamStandings(room) {
   if (!room.teams) return null;
-  return TEAMS.map((t, i) => {
+  return TEAMS.slice(0, room.teams).map((t, i) => {
     const members = [...room.players.values()].filter(p => p.team === i);
     const total = members.reduce((n, p) => n + p.score, 0);
     return { ...t, members: members.length, score: members.length ? Math.round(total / members.length) : 0 };
   });
 }
 
-// New players join the smaller team (ties go to a random one).
+// New players join the smallest team (ties go to a random one of them).
 function pickTeam(room) {
-  const sizes = TEAMS.map((_, i) => [...room.players.values()].filter(p => p.team === i).length);
-  return sizes[0] === sizes[1] ? crypto.randomInt(2) : sizes[0] < sizes[1] ? 0 : 1;
+  const sizes = TEAMS.slice(0, room.teams).map((_, i) => [...room.players.values()].filter(p => p.team === i).length);
+  const smallest = sizes.map((n, i) => [n, i]).filter(([n]) => n === Math.min(...sizes)).map(([, i]) => i);
+  return smallest[crypto.randomInt(smallest.length)];
+}
+
+// Which options a 50/50 may hide: plain choice-style questions with at least 3 options.
+const canFifty = q => ['choice', 'clues'].includes(typeOf(q)) && q.options.length >= 3;
+
+// End-of-game awards from each player's per-question log.
+function awards(room) {
+  const players = [...room.players.values()];
+  const out = [];
+  const fast = players.flatMap(p => p.log.filter(l => l?.hit && l.ms != null).map(l => ({ p, ms: l.ms }))).sort((a, b) => a.ms - b.ms)[0];
+  if (fast) out.push({ icon: '⚡', title: 'Ең жылдам', name: fast.p.name, avatar: fast.p.avatar, value: `${(fast.ms / 1000).toFixed(1)} с` });
+  const streak = [...players].sort((a, b) => b.bestStreak - a.bestStreak || b.score - a.score)[0];
+  if (streak?.bestStreak >= 2) out.push({ icon: '🔥', title: 'Ең ұзақ серия', name: streak.name, avatar: streak.avatar, value: `${streak.bestStreak} қатарынан` });
+  const acc = p => { const done = p.log.filter(l => l && l.ms != null); return done.length ? done.filter(l => l.hit).length / done.length : -1; };
+  const sniper = [...players].sort((a, b) => acc(b) - acc(a) || b.score - a.score)[0];
+  if (sniper && acc(sniper) > 0) out.push({ icon: '🎯', title: 'Мерген', name: sniper.name, avatar: sniper.avatar, value: `${Math.round(acc(sniper) * 100)}% дәл` });
+  return out;
+}
+
+// Teacher report: how the class did on every question (hardest first) and a results table.
+function report(room) {
+  const players = [...room.players.values()];
+  return {
+    questions: room.history.filter(Boolean).map(hq => ({ ...hq, pct: hq.players ? Math.round((hq.hits / hq.players) * 100) : 0 })).sort((a, b) => a.pct - b.pct),
+    results: [...players].sort((a, b) => b.score - a.score).map(p => ({
+      name: p.name, avatar: p.avatar, team: room.teams ? TEAMS[p.team].name : '', score: p.score,
+      correct: p.log.filter(l => l?.hit).length, answers: room.questions.map((_, i) => (p.log[i] ? (p.log[i].hit ? 1 : 0) : null)),
+    })),
+    awards: awards(room),
+  };
 }
 
 const rankOf = (room, p) => 1 + [...room.players.values()].filter(o => o.score > p.score).length;
@@ -230,7 +267,7 @@ const isGolden = room => room.golden && room.q === room.questions.length - 1 && 
 function hostView(room) {
   const v = {
     phase: room.phase, pin: room.pin, title: room.title, q: room.q, total: room.questions.length,
-    players: [...room.players.values()].map(p => ({ id: p.id, name: p.name, score: p.score, gained: p.gained, streak: p.streak, connected: p.connected, answered: p.answer !== null, team: p.team })),
+    players: [...room.players.values()].map(p => ({ id: p.id, name: p.name, avatar: p.avatar, score: p.score, gained: p.gained, streak: p.streak, connected: p.connected, answered: p.answer !== null, team: p.team, power: room.phase === 'reveal' ? p.active : null })),
     teams: teamStandings(room),
     golden: room.golden,
   };
@@ -246,18 +283,20 @@ function hostView(room) {
     if (v.question.options) v.counts = q.options.map((_, i) => all.filter(p => p.answer === i).length);
     if (typeOf(q) === 'year') v.guesses = all.filter(p => p.answer !== null).map(p => ({ name: p.name, value: p.answer }));
   }
+  if (room.phase === 'final') v.report = report(room);
   return v;
 }
 
 function playerView(room, p) {
-  const v = { phase: room.phase, pin: room.pin, title: room.title, id: p.id, name: p.name, score: p.score, streak: p.streak, q: room.q, total: room.questions.length, playerCount: room.players.size };
+  const v = { phase: room.phase, pin: room.pin, title: room.title, id: p.id, name: p.name, avatar: p.avatar, score: p.score, streak: p.streak, q: room.q, total: room.questions.length, playerCount: room.players.size, powers: p.powers, active: p.active };
   if (room.teams) { v.team = TEAMS[p.team]; v.teams = teamStandings(room); }
-  if (room.phase === 'question' || room.phase === 'reveal') { v.question = publicQuestion(room); v.answer = p.answer; }
+  if (room.phase === 'question' || room.phase === 'reveal') { v.question = publicQuestion(room); v.answer = p.answer; v.hidden = p.hidden; v.canFifty = canFifty(current(room)); }
   if (room.phase === 'question') { v.remaining = Math.max(0, room.endsAt - Date.now()); v.timeLimit = room.limit / 1000; }
   if (room.phase === 'reveal') {
     const q = current(room);
-    Object.assign(v, { solution: solutionOf(q), fact: q.fact, source: q.source, gained: p.gained, hit: p.hit, diff: p.diff, right: p.right });
+    Object.assign(v, { solution: solutionOf(q), fact: q.fact, source: q.source, gained: p.gained, hit: p.hit, diff: p.diff, right: p.right, shielded: p.shielded, newPower: p.newPower });
   }
+  if (room.phase === 'final') v.awards = awards(room).filter(a => a.name === p.name);
   if (room.phase !== 'lobby' && room.phase !== 'question') v.rank = rankOf(room, p);
   return v;
 }
@@ -289,7 +328,7 @@ function askQuestion(room, index) {
     const letters = [...q.answer];
     do room.display = shuffled(letters.map((_, i) => i)); while (room.display.map(i => letters[i]).join('') === q.answer);
   }
-  for (const p of room.players.values()) Object.assign(p, { answer: null, answerMs: 0, gained: 0, hit: false, diff: undefined, right: undefined });
+  for (const p of room.players.values()) Object.assign(p, { answer: null, answerMs: 0, gained: 0, hit: false, diff: undefined, right: undefined, active: null, hidden: [], shielded: false, newPower: null });
   room.timers.push(setTimeout(() => reveal(room), room.limit + GRACE_MS));
   if (typeOf(q) === 'clues') {
     const step = room.limit / q.clues.length;
@@ -302,13 +341,29 @@ function reveal(room) {
   if (room.phase !== 'question') return;
   clearTimers(room);
   const golden = isGolden(room);
+  const q = current(room);
   for (const p of room.players.values()) {
     const g = grade(room, p);
     if (golden) g.gained *= 2;
+    if (p.active === 'double') g.gained *= 2;
     Object.assign(p, g);
     p.score += g.gained;
-    p.streak = g.hit ? p.streak + 1 : 0;
+    p.shielded = !g.hit && p.active === 'shield' && p.streak > 0;
+    if (!p.shielded) p.streak = g.hit ? p.streak + 1 : 0;
+    p.bestStreak = Math.max(p.bestStreak, p.streak);
+    p.newPower = null;
+    if (g.hit && p.streak % 2 === 0 && p.powers.length < 2) {
+      p.newPower = POWERS[crypto.randomInt(POWERS.length)];
+      p.powers.push(p.newPower);
+    }
+    p.log[room.q] = { hit: g.hit, ms: p.answer !== null ? p.answerMs : null };
   }
+  const plain = typeOf(q) === 'choice' && !q.rune && !q.quote && !q.emoji && !q.image;
+  room.history[room.q] = {
+    text: q.text, type: typeOf(q), players: room.players.size, hits: [...room.players.values()].filter(p => p.hit).length,
+    // plain multiple-choice questions can be re-used for a "hard questions" quiz
+    quiz: plain ? { text: q.text, options: q.options, correct: q.correct, fact: q.fact, source: q.source } : undefined,
+  };
   room.phase = 'reveal';
   emitAll(room);
 }
@@ -328,7 +383,8 @@ function resetRoom(room) {
   room.phase = 'lobby';
   room.q = -1;
   room.questions = room.pick();
-  for (const p of room.players.values()) Object.assign(p, { score: 0, streak: 0, answer: null, gained: 0, hit: false });
+  room.history = [];
+  for (const p of room.players.values()) Object.assign(p, { score: 0, streak: 0, bestStreak: 0, answer: null, gained: 0, hit: false, powers: [], active: null, hidden: [], log: [] });
   emitAll(room);
 }
 
@@ -378,7 +434,8 @@ io.on('connection', socket => {
     const room = {
       pin: newPin(), hostKey: token(), title, pick, questions: pick(),
       timeLimit: [10, 20, 30, 60].includes(opts.timeLimit) ? opts.timeLimit : 20,
-      teams: !!opts.teams, golden: opts.golden !== false,
+      teams: [2, 3, 4].includes(Number(opts.teams)) ? Number(opts.teams) : opts.teams === true ? 2 : 0,
+      golden: opts.golden !== false, history: [],
       players: new Map(), phase: 'lobby', q: -1, limit: 0, startedAt: 0, endsAt: 0, display: [], timers: [], touched: Date.now(),
     };
     rooms.set(room.pin, room);
@@ -429,7 +486,7 @@ io.on('connection', socket => {
     emitAll(room);
   });
 
-  socket.on('player:join', ({ pin, name, id } = {}, ack) => {
+  socket.on('player:join', ({ pin, name, id, avatar } = {}, ack) => {
     const room = rooms.get(clean(pin, 6));
     if (!room) return reply(ack, { error: 'Мұндай PIN-кодпен ойын жоқ' });
     room.touched = Date.now();
@@ -440,7 +497,11 @@ io.on('connection', socket => {
       if (!name) return reply(ack, { error: 'Есіміңді жаз' });
       if ([...room.players.values()].some(o => o.name.toLowerCase() === name.toLowerCase())) return reply(ack, { error: 'Бұл есім бос емес, басқасын таңда' });
       if (room.players.size >= MAX_PLAYERS) return reply(ack, { error: 'Ойын толы' });
-      p = { id: token(), name, score: 0, streak: 0, answer: null, answerMs: 0, gained: 0, hit: false, team: room.teams ? pickTeam(room) : undefined };
+      p = {
+        id: token(), name, avatar: AVATARS.includes(avatar) ? avatar : AVATARS[crypto.randomInt(AVATARS.length)],
+        score: 0, streak: 0, bestStreak: 0, answer: null, answerMs: 0, gained: 0, hit: false,
+        powers: [], active: null, hidden: [], log: [], team: room.teams ? pickTeam(room) : undefined,
+      };
       room.players.set(p.id, p);
     } else if (p.socketId && p.socketId !== socket.id) {
       io.in(p.socketId).socketsLeave(`r:${room.pin}`); // same player opened a second tab
@@ -452,6 +513,23 @@ io.on('connection', socket => {
     reply(ack, { pin: room.pin, id: p.id, name: p.name });
     emitPlayer(room, p);
     emitHost(room);
+  });
+
+  // Use a power-up on the open question, before answering.
+  socket.on('player:power', type => {
+    const { pin, id } = socket.data.player || {};
+    const room = rooms.get(pin);
+    const p = room?.players.get(id);
+    if (!p || p.socketId !== socket.id || room.phase !== 'question' || p.answer !== null || p.active || !p.powers.includes(type)) return;
+    const q = current(room);
+    if (type === 'fifty' && !canFifty(q)) return;
+    p.powers.splice(p.powers.indexOf(type), 1);
+    p.active = type;
+    if (type === 'fifty') {
+      const wrong = shuffled(q.options.map((_, i) => i).filter(i => i !== q.correct));
+      p.hidden = wrong.slice(0, q.options.length >= 4 ? 2 : 1);
+    }
+    emitPlayer(room, p);
   });
 
   socket.on('player:answer', answer => {

@@ -1,5 +1,13 @@
 const SESSION_KEY = 'bayge.player';
 const NAME_KEY = 'bayge.name';
+const AVATAR_KEY = 'bayge.avatar';
+
+// Avatar picker: remembered between games.
+let myAvatar = AVATARS.includes(store.get(AVATAR_KEY)) ? store.get(AVATAR_KEY) : AVATARS[Math.floor(Math.random() * AVATARS.length)];
+$('#avatars').replaceChildren(...AVATARS.map(a => h('button', {
+  type: 'button', class: 'avatar', role: 'radio', 'aria-label': a, 'aria-checked': String(a === myAvatar),
+  onclick: e => { myAvatar = a; store.set(AVATAR_KEY, a); [...$('#avatars').children].forEach(b => b.setAttribute('aria-checked', String(b === e.currentTarget))); },
+}, a)));
 
 let state = null;
 $('#sound-slot').append(soundToggle());
@@ -48,7 +56,7 @@ $('#join-form').addEventListener('submit', e => {
   const btn = $('#join-btn');
   btn.disabled = true;
   $('#join-error').textContent = '';
-  socket.timeout(8000).emit('player:join', { pin, name }, (err, r) => {
+  socket.timeout(8000).emit('player:join', { pin, name, avatar: myAvatar }, (err, r) => {
     btn.disabled = false;
     if (err) return ($('#join-error').textContent = 'Серверге қосылу мүмкін болмады. Интернетті тексер.');
     if (r.error) return ($('#join-error').textContent = r.error);
@@ -62,7 +70,7 @@ socket.on('player:state', s => {
   state = s;
   syncBackTrap();
   $('#me').hidden = false;
-  $('#me').textContent = `${s.team ? `${s.team.icon} ` : ''}${s.name} · ${s.score}`;
+  $('#me').textContent = `${s.avatar || ''} ${s.name} · ${s.score}${s.team ? ` · ${s.team.icon}` : ''}`;
   const fresh = !prev || prev.phase !== s.phase || prev.q !== s.q;
 
   if (s.phase === 'lobby') {
@@ -84,10 +92,15 @@ socket.on('player:state', s => {
     show('final');
     $('#final-place').textContent = s.rank <= 3 ? ['🥇', '🥈', '🥉'][s.rank - 1] : `${s.rank}`;
     $('#final-title').textContent = s.rank === 1 ? 'Сен — бәйгенің жүйрігі!' : `${s.rank}-орын`;
-    const teamLine = s.team && s.teams
-      ? ` · ${s.teams[0].score === s.teams[1].score ? 'командалар тең түсті' : s.teams.reduce((a, b) => (a.score > b.score ? a : b)).name === s.team.name ? 'командаң жеңді! 🎉' : 'командаң екінші орында'}`
-      : '';
+    let teamLine = '';
+    if (s.team && s.teams) {
+      const mine = s.teams.find(t => t.name === s.team.name);
+      const place = 1 + s.teams.filter(t => t.score > mine.score).length;
+      const tied = s.teams.filter(t => t.score === mine.score).length > 1;
+      teamLine = place === 1 ? (tied ? ' · командаң бірінші орынды бөлісті' : ' · командаң жеңді! 🎉') : ` · командаң ${place}-орында`;
+    }
     $('#final-info').textContent = `${s.score} ұпай · ${s.playerCount} ойыншы${teamLine}`;
+    $('#final-awards').replaceChildren(...(s.awards || []).map(a => h('span', { class: 'pill' }, `${a.icon} ${a.title} · ${a.value}`)));
     if (s.rank <= 3) { confetti(5000); buzz([80, 60, 80, 60, 200]); }
   }
 });
@@ -106,11 +119,35 @@ function renderAsk(s, fresh) {
     $('#pad').replaceChildren(...answerPad(q));
     countdown($('#timer'), s.remaining, s.timeLimit * 1000);
   }
+  paintPowers(s);
   if (rebuild || (q.clues?.length || 0) !== seenClues) {
     $('#qextra').replaceChildren(...extras(q, null, seenClues));
     if (!rebuild) buzz(30); // a new clue opened
     seenClues = q.clues?.length || 0;
   }
+}
+
+// Power-ups in hand; one per question, used before answering.
+function paintPowers(s) {
+  const bar = $('#powerbar');
+  const active = s.active && POWER_INFO[s.active];
+  bar.replaceChildren(
+    active ? h('span', { class: 'power on' }, `${active.icon} ${active.name} қосулы`) : '',
+    ...(active ? [] : (s.powers || []).map(type => {
+      const info = POWER_INFO[type];
+      const blocked = type === 'fifty' && !s.canFifty;
+      return h('button', {
+        type: 'button', class: 'power', disabled: blocked, title: blocked ? 'Бұл сұраққа келмейді' : info.hint,
+        onclick: () => { Sound.sfx('golden'); socket.emit('player:power', type); },
+      }, `${info.icon} ${info.name}`);
+    })));
+  bar.hidden = !bar.children.length;
+  // 50/50: hide the removed options
+  document.querySelectorAll('#pad .tiles > .tile').forEach((t, i) => {
+    const gone = (s.hidden || []).includes(i);
+    t.classList.toggle('gone', gone);
+    t.disabled = gone;
+  });
 }
 
 function answerPad(q) {
@@ -216,6 +253,10 @@ function renderResult(s) {
   $('#result-note').replaceChildren(...note);
   $('#result-rank').textContent = `${s.rank}-орын · ${s.score} ұпай`;
   $('#result-fact').replaceChildren(factBox(s.fact, s.source));
+  $('#result-extra').replaceChildren(
+    s.shielded ? h('span', { class: 'pill' }, '🛡️ Қалқан серияңды сақтап қалды') : '',
+    s.newPower ? h('span', { class: 'pill power-new' }, `Жаңа күш: ${POWER_INFO[s.newPower].icon} ${POWER_INFO[s.newPower].name}!`) : '');
+  if (s.newPower) setTimeout(() => Sound.sfx('golden'), 600);
   buzz(s.hit ? [60, 40, 60] : 250);
   Sound.sfx(s.hit ? 'correct' : 'wrong');
 }

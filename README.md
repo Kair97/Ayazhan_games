@@ -24,7 +24,12 @@ There are 120 built-in questions. Every question has a "Білесің бе?" fa
 
 Other features:
 - **Your own quiz:** write one in the browser editor, or have the AI draft one (see below).
-- **Team mode:** 🐺 Көк бөрілер vs 🦅 Алтын қырандар. Teams are auto-balanced and scored by average points.
+- **Team mode:** 2, 3 or 4 teams: 🐺 Көк бөрілер, 🦅 Алтын қырандар, 🐎 Жүйрік тұлпарлар, 🐆 Ақ барыстар. Teams are auto-balanced and scored by average points.
+- **Power-ups:** every 2 correct answers in a row earn one (max 2 in hand), used before answering: 🛡️ Қалқан (a wrong answer doesn't break the streak), ✂️ 50/50 (hides two wrong options, never the right one), ⚡ Екі есе (double points).
+- **Avatars:** players pick 🐺🦅🐎🐆🦌🐫🦉🐻 when joining.
+- **Awards** at the end: ⚡ Ең жылдам, 🔥 Ең ұзақ серия, 🎯 Мерген.
+- **Lesson report for the teacher:** every question with % correct (hardest first), one click to turn the hard ones into a repeat quiz, and a results table for Excel (CSV, UTF-8 BOM).
+- **Fits one screen on a PC/projector:** host screens scale down to the window height instead of scrolling.
 - **Golden question:** the last question is worth double points.
 - **Music and sounds:** synthesised in the browser (dombra-style plucks, galloping hooves, a fanfare), with a mute button. No audio files are used.
 - **Resilient connections:** players can refresh or lose Wi-Fi and they rejoin with their score. The host can resume too, or control the game from a second device ("Телефон-пульт").

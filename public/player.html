@@ -28,6 +28,9 @@
         <label class="field">Есімің
           <input class="input" id="name-input" maxlength="20" placeholder="Мысалы: Айбек" autocomplete="nickname" required>
         </label>
+        <div class="field">Бейнең
+          <div class="avatars" id="avatars" role="radiogroup" aria-label="Бейне таңдау"></div>
+        </div>
         <button class="btn btn-block btn-lg" id="join-btn">Кіру</button>
         <p class="error" id="join-error" role="alert"></p>
       </form>
@@ -50,6 +53,7 @@
       </div>
       <h2 class="qtext" id="qtext"></h2>
       <div id="qextra"></div>
+      <div class="powerbar" id="powerbar"></div>
       <div id="pad"></div>
     </section>
 
@@ -67,6 +71,7 @@
         <div id="result-note"></div>
       </div>
       <span class="pill" id="result-rank"></span>
+      <div class="center-row" id="result-extra" style="margin-top:0"></div>
       <div id="result-fact" style="width:min(420px,100%)"></div>
     </section>
 
@@ -82,6 +87,7 @@
       <div class="place" id="final-place"></div>
       <h2 id="final-title"></h2>
       <p class="muted" id="final-info"></p>
+      <div class="center-row" id="final-awards" style="margin-top:0"></div>
       <button class="btn btn-ghost" id="again-btn">Басқа ойынға қосылу</button>
     </section>
   </main>

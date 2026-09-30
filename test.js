@@ -220,6 +220,87 @@ server.listen(0, async () => {
     assert.strictEqual(rooms.get(okRoom.pin).questions[0].source.url, 'https://kk.wikipedia.org/wiki/X');
     h.emit('host:close');
 
+    // ---------- 3 teams, avatars, power-ups, report, awards ----------
+    const tg = await call(h, 'host:create', { packId: 'negizder', timeLimit: 10, teams: 3, golden: false });
+    const five = [client(), client(), client(), client(), client()];
+    for (const [i, c2] of five.entries()) await call(c2, 'player:join', { pin: tg.pin, name: `P${i}`, avatar: i === 0 ? '🦉' : 'not-an-avatar' });
+    const tRoom = rooms.get(tg.pin);
+    const tSizes = [0, 1, 2].map(t => [...tRoom.players.values()].filter(p => p.team === t).length).sort();
+    assert.deepStrictEqual(tSizes, [1, 2, 2], '5 players over 3 teams');
+    const avatars = [...tRoom.players.values()].map(p => p.avatar);
+    assert.strictEqual(avatars[0], '🦉');
+    assert.ok(avatars.every(a => ['🐺', '🦅', '🐎', '🐆', '🦌', '🐫', '🦉', '🐻'].includes(a)), 'unknown avatar replaced by a valid one');
+    h.emit('host:close');
+
+    const pg = await call(h, 'host:create', { packId: 'negizder', timeLimit: 10, golden: false });
+    const pA = client(), pB = client();
+    const ja2 = await call(pA, 'player:join', { pin: pg.pin, name: 'A' });
+    await call(pB, 'player:join', { pin: pg.pin, name: 'B' });
+    const pRoom = rooms.get(pg.pin);
+    const me = pRoom.players.get(ja2.id);
+    const cur = () => pRoom.questions[pRoom.q].correct;
+    const nextQ = async () => { await advanceTo(h, 'leaderboard'); const st = next(pA, 'player:state', v => v.phase === 'question'); h.emit('host:next'); return st; };
+
+    let qa = next(pA, 'player:state', v => v.phase === 'question');
+    h.emit('host:start'); await qa;
+    await answerAndReveal(h, [pA, pB], [cur(), (cur() + 1) % 4]);
+    assert.strictEqual(me.powers.length, 0, 'no power after 1 correct');
+    await nextQ();
+    const earned = next(pA, 'player:state', v => v.phase === 'reveal');
+    await answerAndReveal(h, [pA, pB], [cur(), (cur() + 1) % 4]);
+    const er = await earned;
+    assert.strictEqual(me.streak, 2);
+    assert.ok(['shield', 'fifty', 'double'].includes(er.newPower) && er.powers.length === 1, 'a power-up is earned at a streak of 2');
+
+    // 50/50 hides two WRONG options, one power per question
+    me.powers = ['fifty', 'double'];
+    await nextQ();
+    const hid = next(pA, 'player:state', v => v.phase === 'question' && v.active === 'fifty');
+    pA.emit('player:power', 'fifty');
+    const hs = await hid;
+    assert.strictEqual(hs.hidden.length, 2);
+    assert.ok(!hs.hidden.includes(cur()), '50/50 never hides the correct answer');
+    pA.emit('player:power', 'double');
+    await new Promise(r => setTimeout(r, 150));
+    assert.deepStrictEqual(me.powers, ['double'], 'only one power per question');
+    await answerAndReveal(h, [pA, pB], [cur(), (cur() + 1) % 4]);
+
+    // double points
+    await nextQ();
+    pA.emit('player:power', 'double');
+    const dr = await answerAndReveal(h, [pA, pB], [cur(), (cur() + 1) % 4]);
+    assert.ok(dr.players.find(p => p.name === 'A').gained >= 2000, 'double points');
+    assert.strictEqual(dr.players.find(p => p.name === 'A').power, 'double', 'host sees the power used');
+
+    // shield keeps the streak on a wrong answer
+    me.powers = ['shield'];
+    const before = me.streak;
+    await nextQ();
+    pA.emit('player:power', 'shield');
+    const sh = next(pA, 'player:state', v => v.phase === 'reveal');
+    await answerAndReveal(h, [pA, pB], [(cur() + 1) % 4, cur()]);
+    assert.strictEqual(me.streak, before, 'shield kept the streak');
+    assert.strictEqual((await sh).shielded, true);
+
+    // play to the end: report + awards
+    let fin;
+    for (let guard = 0; guard < 40; guard++) {
+      const nx = next(h, 'host:state', v => v.phase !== 'question');
+      h.emit('host:next');
+      const st2 = await nx;
+      if (st2.phase === 'final') { fin = st2; break; }
+    }
+    assert.ok(fin?.report, 'final state carries the report');
+    const rq = fin.report.questions;
+    assert.strictEqual(rq.length, pRoom.questions.length);
+    assert.ok(rq.every((x, i) => i === 0 || rq[i - 1].pct <= x.pct), 'hardest questions first');
+    assert.ok(rq.some(x => x.quiz && x.quiz.options.length === 4), 'plain questions can be re-used as a quiz');
+    const rowA = fin.report.results.find(r => r.name === 'A');
+    assert.strictEqual(rowA.answers.length, pRoom.questions.length);
+    assert.strictEqual(rowA.correct, rowA.answers.filter(x => x === 1).length);
+    assert.ok(fin.report.awards.some(a => a.icon === '🔥' && a.name === 'A'), 'longest streak award');
+    h.emit('host:close');
+
     // ---------- AI pipeline with a fake LLM that lies ----------
     const SRC = [{ id: 'S1', lang: 'kk', title: 'Абылай хан', url: 'https://kk.wikipedia.org/wiki/Абылай_хан', text: 'Абылай хан 1711 жылы туған. Ол 1771 жылы Түркістанда хан болып сайланды. Абылай хан 1781 жылы қайтыс болды.' }];
     const draft = { questions: [
