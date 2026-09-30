@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0d5ea6">
+  <title>Жүргізуші · Бәйге</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='7' fill='%23f2b233'/%3E%3Cg stroke='%23f2b233' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M16 2v4M16 26v4M2 16h4M26 16h4M6 6l3 3M23 23l3 3M6 26l3-3M23 9l3-3'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="frieze" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <svg class="sun" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="7" fill="currentColor"/><g stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M16 2v4M16 26v4M2 16h4M26 16h4M6 6l3 3M23 23l3 3M6 26l3-3M23 9l3-3"/></g></svg>
+      Бәйге
+    </a>
+    <div class="topbar-actions">
+      <span id="sound-slot"></span>
+    <div class="topbar-actions" id="game-actions" hidden>
+      <span class="pill">PIN <b id="top-pin"></b></span>
+      <button class="btn btn-ghost btn-small" id="remote-btn">Телефон-пульт</button>
+      <button class="btn btn-ghost btn-small" id="close-btn">Жабу</button>
+    </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- 1. setup -->
+    <section class="screen" id="setup" hidden>
+      <p class="eyebrow">Жаңа ойын</p>
+      <h1 style="font-size:clamp(28px,5vw,48px);margin-bottom:24px">Ойынды таңда да, бәйгені баста</h1>
+      <form class="setup" id="setup-form">
+        <div class="card">
+          <h2>Ойындар</h2>
+          <div class="packs" id="packs"></div>
+          <button type="button" class="btn btn-ghost btn-block" id="ai-open" style="margin-top:12px" hidden>✨ ИИ-мен жаңа тақырыпқа квиз жасау</button>
+        </div>
+        <div class="card">
+          <h2>Баптаулар</h2>
+          <div class="field">Бір сұраққа уақыт
+            <div class="segmented" role="radiogroup">
+              <label><input type="radio" name="time" value="10">10 с</label>
+              <label><input type="radio" name="time" value="20" checked>20 с</label>
+              <label><input type="radio" name="time" value="30">30 с</label>
+              <label><input type="radio" name="time" value="60">60 с</label>
+            </div>
+          </div>
+          <p class="hint">Жылды табу, ретімен қою және жұмбақ сұрақтарына уақыт автоматты түрде көбірек беріледі.</p>
+          <label class="check"><input type="checkbox" name="shuffle" checked> Сұрақтарды араластыру</label>
+          <label class="check" style="margin-top:-8px"><input type="checkbox" name="golden" checked> Соңғы сұрақ — «Алтын сұрақ» (ұпай ×2)</label>
+          <label class="check" style="margin-top:-8px"><input type="checkbox" name="teams"> Командалық ойын: 🐺 Көк бөрілер мен 🦅 Алтын қырандар</label>
+          <button class="btn btn-block btn-lg" id="create-btn">Ойынды ашу</button>
+          <p class="error" id="setup-error" role="alert"></p>
+        </div>
+      </form>
+    </section>
+
+    <!-- 2. lobby -->
+    <section class="screen lobby" id="lobby" hidden>
+      <div class="card joinbox">
+        <p class="step">Телефонда ашыңыз</p>
+        <p class="url" id="join-url"></p>
+        <p class="step">PIN-код</p>
+        <div class="pin" id="pin"></div>
+        <div class="qr"><img id="qr" alt="Ойынға қосылу QR-коды"></div>
+        <p class="step">немесе камерамен QR-кодты сканерлеңіз</p>
+        <div class="warn" id="lan-warn" hidden></div>
+      </div>
+      <div>
+        <div class="roster-head">
+          <h2>Ойыншылар: <b id="player-count">0</b></h2>
+          <span class="muted" id="pack-title"></span>
+        </div>
+        <div class="chips" id="chips"></div>
+        <div class="center-row" style="justify-content:flex-start">
+          <button class="btn btn-lg" id="start-btn" disabled>Бәйгені бастау</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. question + reveal -->
+    <section class="screen" id="play" hidden>
+      <div class="qhead">
+        <span class="qcount" id="qcount"></span>
+        <div class="timer" id="timer"><span></span></div>
+      </div>
+      <h2 class="qtext" id="qtext"></h2>
+      <div id="qextra"></div>
+      <div id="qbody"></div>
+      <div id="fact"></div>
+      <div class="qfoot">
+        <span class="answered" id="answered"></span>
+        <button class="btn btn-lg" id="next-btn"></button>
+      </div>
+    </section>
+
+    <!-- 4. leaderboard -->
+    <section class="screen" id="board" hidden>
+      <h2 class="race-title">Бәйге</h2>
+      <p class="race-sub muted" id="board-sub"></p>
+      <div id="board-teams"></div>
+      <div class="race" id="race"></div>
+      <div class="center-row"><button class="btn btn-lg" id="board-next"></button></div>
+    </section>
+
+    <!-- 5. final -->
+    <section class="screen" id="final" hidden>
+      <h2 class="race-title">Жеңімпаздар</h2>
+      <p class="race-sub muted" id="final-sub"></p>
+      <div id="final-teams"></div>
+      <div class="podium" id="podium"></div>
+      <ol class="rest" id="rest"></ol>
+      <div class="center-row">
+        <button class="btn btn-lg" id="again-btn">Қайта ойнау</button>
+        <button class="btn btn-ghost btn-lg" id="new-btn">Жаңа ойын</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- quiz editor -->
+  <dialog id="editor">
+    <form method="dialog" id="editor-form">
+      <div class="dlg-head">
+        <h2 style="font-size:20px">Өз квизің</h2>
+        <button class="btn btn-ghost btn-small" value="cancel" formnovalidate>Жабу</button>
+      </div>
+      <div class="dlg-body">
+        <label class="field">Квиз атауы
+          <input class="input" id="quiz-title" maxlength="60" required placeholder="Мысалы: 7-сынып, Түрік қағанаты">
+        </label>
+        <div id="qlist"></div>
+        <button type="button" class="btn btn-ghost btn-block" id="add-q">+ Сұрақ қосу</button>
+        <p class="hint">Әр сұраққа 2–4 жауап. Дөңгелекпен дұрыс жауапты белгілеңіз. Квиз осы браузерде сақталады.</p>
+      </div>
+      <div class="dlg-foot">
+        <p class="error" id="editor-error" role="alert" style="margin:0"></p>
+        <button class="btn" id="save-quiz" value="save">Сақтау</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- AI quiz generator -->
+  <dialog id="ai">
+    <div class="dlg-head">
+      <h2 style="font-size:20px">✨ ИИ-мен квиз жасау</h2>
+      <form method="dialog"><button class="btn btn-ghost btn-small">Жабу</button></form>
+    </div>
+    <div class="dlg-body">
+      <form id="ai-setup" hidden>
+        <p class="ai-note">ИИ әлі қосылмаған. Бір рет қана жасалады, тегін:</p>
+        <ol class="ai-howto">
+          <li><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> сайтын ашып, Google аккаунтыңызбен кіріңіз.</li>
+          <li><b>Create API key</b> батырмасын басып, пайда болған кілтті көшіріңіз.</li>
+          <li>Кілтті төмендегі жолға қойып, «Қосу» батырмасын басыңыз.</li>
+        </ol>
+        <p class="hint">Мектептің Wi-Fi желісі Google ИИ-ін бұғаттаса, оның орнына тегін Groq кілтін қолдануға болады: <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a> → <b>Create API Key</b> (кілт <b>gsk_</b> деп басталады).</p>
+        <label class="field">API кілті
+          <input class="input" id="ai-key" type="password" autocomplete="off" spellcheck="false" required placeholder="AIza... немесе gsk_...">
+        </label>
+        <button class="btn btn-block btn-lg" id="ai-key-save">Қосу</button>
+      </form>
+      <form id="ai-form">
+        <p class="ai-note">ИИ сұрақтарды тек Уикипедия мақалаларынан жасайды. Әр сұрақтың дәлелі (мақаладан алынған нақты сөйлем) тексеріледі, күмәнділері алынып тасталады. Ойнамас бұрын сұрақтарды өзіңіз қарап шығыңыз.</p>
+        <label class="field">Тақырып
+          <input class="input" id="ai-topic" maxlength="120" required placeholder="Мысалы: Абылай хан, Қазақ хандығы, Ұлы Жібек жолы">
+        </label>
+        <div class="ai-grid">
+          <label class="field">Сұрақ саны
+            <select class="input" id="ai-count"><option>5</option><option selected>10</option><option>15</option></select>
+          </label>
+          <label class="field">Деңгейі
+            <select class="input" id="ai-level"><option value="easy">Оңай</option><option value="medium" selected>Орташа</option><option value="hard">Қиын</option></select>
+          </label>
+          <label class="field">Тілі
+            <select class="input" id="ai-lang"><option value="kk" selected>Қазақша</option><option value="ru">Орысша</option></select>
+          </label>
+        </div>
+        <button class="btn btn-block btn-lg" id="ai-go">Квиз жасау</button>
+      </form>
+      <ul class="ai-steps" id="ai-steps" hidden>
+        <li>Уикипедиядан мақалалар ізделуде</li>
+        <li>ИИ сұрақтар жазуда</li>
+        <li>Дәлелдер тексерілуде</li>
+      </ul>
+      <p class="error" id="ai-error" role="alert"></p>
+      <div id="ai-result"></div>
+    </div>
+    <div class="dlg-foot" id="ai-foot" hidden>
+      <span class="muted" id="ai-summary" style="color:var(--ink-soft)"></span>
+      <button class="btn" id="ai-save">Квиз ретінде сақтау</button>
+    </div>
+  </dialog>
+
+  <!-- control from another device -->
+  <dialog id="remote">
+    <div class="dlg-head">
+      <h2 style="font-size:20px">Телефон-пульт</h2>
+      <form method="dialog"><button class="btn btn-ghost btn-small">Жабу</button></form>
+    </div>
+    <div class="dlg-body remote">
+      <p>Телефонның камерасымен сканерлеңіз. Ойынды ноутбуктен де, телефоннан да басқаруға болады.</p>
+      <div class="qr"><img id="remote-qr" alt="Басқару сілтемесінің QR-коды"></div>
+      <p class="hint">Бұл кодты ойыншыларға көрсетпеңіз: ол ойынды басқаруға рұқсат береді.</p>
+    </div>
+  </dialog>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="common.js"></script>
+  <script src="sound.js"></script>
+  <script src="host.js"></script>
+</body>
+</html>

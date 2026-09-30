@@ -1,0 +1,22 @@
+# dependencies
+node_modules/
+
+# secrets: API keys live only in .env on the machine that runs the game
+.env
+.env.*
+!.env.example
+
+# logs and OS junk
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# editors
+.vscode/
+.idea/
+
+# local test artefacts
+test-results/
+playwright-report/

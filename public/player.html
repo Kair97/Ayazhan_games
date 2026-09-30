@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d5ea6">
+  <title>Ойыншы · Бәйге</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='7' fill='%23f2b233'/%3E%3Cg stroke='%23f2b233' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M16 2v4M16 26v4M2 16h4M26 16h4M6 6l3 3M23 23l3 3M6 26l3-3M23 9l3-3'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="player">
+  <div class="frieze" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <svg class="sun" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="7" fill="currentColor"/><g stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M16 2v4M16 26v4M2 16h4M26 16h4M6 6l3 3M23 23l3 3M6 26l3-3M23 9l3-3"/></g></svg>
+      Бәйге
+    </a>
+    <div class="topbar-actions"><span id="sound-slot"></span><span class="pill" id="me" hidden></span></div>
+  </header>
+
+  <main class="wrap narrow" aria-live="polite">
+    <section class="screen" id="join" hidden>
+      <form class="card" id="join-form" style="margin-top:4vh">
+        <h2>Ойынға қосылу</h2>
+        <label class="field">Ойын PIN-коды
+          <input class="input input-pin" id="pin-input" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000" autocomplete="off" required title="6 цифр">
+        </label>
+        <label class="field">Есіміңіз
+          <input class="input" id="name-input" maxlength="20" placeholder="Мысалы: Айбек" autocomplete="nickname" required>
+        </label>
+        <button class="btn btn-block btn-lg" id="join-btn">Кіру</button>
+        <p class="error" id="join-error" role="alert"></p>
+      </form>
+    </section>
+
+    <section class="screen center" id="wait" hidden>
+      <div class="big-emoji" aria-hidden="true">🐎</div>
+      <h2>Сен ойындасың, <span id="wait-name"></span>!</h2>
+      <p class="muted" id="wait-info"></p>
+      <span class="team-badge" id="wait-team" hidden></span>
+      <div class="spinner" aria-hidden="true"></div>
+      <p class="muted">Жүргізуші ойынды бастағанша күте тұр</p>
+      <button class="link muted" id="leave-btn">Ойыннан шығу</button>
+    </section>
+
+    <section class="screen" id="ask" hidden>
+      <div class="qhead">
+        <span class="qcount" id="qcount"></span>
+        <div class="timer" id="timer"><span></span></div>
+      </div>
+      <h2 class="qtext" id="qtext"></h2>
+      <div id="qextra"></div>
+      <div id="pad"></div>
+    </section>
+
+    <section class="screen center" id="sent" hidden>
+      <div id="sent-mark"></div>
+      <h2>Жауап қабылданды</h2>
+      <p class="muted">Басқалар жауап бергенше күт…</p>
+    </section>
+
+    <section class="screen center" id="result" hidden>
+      <div class="result" id="result-box">
+        <div class="big-emoji" id="result-icon" aria-hidden="true"></div>
+        <h2 id="result-title"></h2>
+        <div class="gain" id="result-gain"></div>
+        <div id="result-note"></div>
+      </div>
+      <span class="pill" id="result-rank"></span>
+      <div id="result-fact" style="width:min(420px,100%)"></div>
+    </section>
+
+    <section class="screen center" id="standing" hidden>
+      <p class="eyebrow">Бәйгедегі орның</p>
+      <div class="place" id="standing-place"></div>
+      <p class="muted" id="standing-info"></p>
+      <p class="muted">Жүргізушінің экранына қара!</p>
+    </section>
+
+    <section class="screen center" id="final" hidden>
+      <p class="eyebrow">Ойын аяқталды</p>
+      <div class="place" id="final-place"></div>
+      <h2 id="final-title"></h2>
+      <p class="muted" id="final-info"></p>
+      <button class="btn btn-ghost" id="again-btn">Басқа ойынға қосылу</button>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="common.js"></script>
+  <script src="sound.js"></script>
+  <script src="player.js"></script>
+</body>
+</html>
