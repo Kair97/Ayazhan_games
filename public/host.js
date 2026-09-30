@@ -60,7 +60,7 @@ function offerOldGame(session) {
       store.del(HOST_KEY);
       return showSetup();
     }
-    const where = r.phase === 'lobby' ? 'әлі басталмаған' : `${r.total} сұрақтың ${r.q + 1}-інде`;
+    const where = r.phase === 'lobby' ? 'әлі басталмаған' : `жүріп жатыр (сұрақ ${r.q + 1} / ${r.total})`;
     const keep = await confirmBox({
       title: 'Аяқталмаған ойын бар',
       text: `«${r.title}» (PIN ${r.pin}, ${r.players} ойыншы) ойыны ${where}. Оны жалғастырасыз ба, әлде жабып, жаңа ойын құрасыз ба?`,
@@ -300,7 +300,7 @@ function renderBoard(s, fresh) {
   if (!fresh) return;
   const top = ranked(s.players).slice(0, 8);
   const max = Math.max(1, top[0]?.score || 0);
-  $('#board-sub').textContent = `${s.total} сұрақтың ${s.q + 1}-інен кейін`;
+  $('#board-sub').textContent = `Сұрақ ${s.q + 1} / ${s.total} аяқталды`;
   $('#board-next').textContent = s.q + 1 < s.total ? 'Келесі сұрақ' : 'Нәтижелер';
 
   Sound.play('race');
@@ -478,7 +478,7 @@ let aiStepTimers = [];
 function paintAi() {
   $('#ai-setup').hidden = aiEnabled || !aiCanSetKey;
   $('#ai-form').hidden = !aiEnabled;
-  $('#ai-error').textContent = aiEnabled || aiCanSetKey ? '' : 'ИИ әлі қосылмаған. Оны ойын іске қосылған компьютерде ✨ батырмасы арқылы қосыңыз.';
+  $('#ai-error').textContent = aiEnabled || aiCanSetKey ? '' : 'ЖИ әлі қосылмаған. Оны ойын іске қосылған компьютерде ✨ батырмасы арқылы қосыңыз.';
 }
 
 $('#ai-open').addEventListener('click', () => {

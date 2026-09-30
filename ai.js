@@ -33,9 +33,9 @@ function config() {
 // Turns low-level network failures into something a teacher can act on.
 function networkError(err) {
   const code = err?.cause?.code || err?.code || '';
-  if (err?.name === 'TimeoutError') return new Error('ИИ сервисі тым ұзақ жауап бермеді. Кейінірек қайталаңыз.');
+  if (err?.name === 'TimeoutError') return new Error('ЖИ сервисі тым ұзақ жауап бермеді. Кейінірек қайталаңыз.');
   if (/ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|UND_ERR/.test(code) || err instanceof TypeError) {
-    return new Error('ИИ сервисіне қосылу мүмкін болмады. Бұл Wi-Fi желісі оны бұғаттауы мүмкін: басқа желіге (мысалы, телефонның хотспотына) қосылып көріңіз.');
+    return new Error('ЖИ сервисіне қосылу мүмкін болмады. Бұл Wi-Fi желісі оны бұғаттауы мүмкін: басқа желіге (мысалы, телефонның хотспотына) қосылып көріңіз.');
   }
   return err;
 }
@@ -90,7 +90,7 @@ async function findSources(topic, fetchImpl = fetch) {
 // ---------- LLM ----------
 async function chat(messages, fetchImpl = fetch) {
   const { key, baseUrl, model } = config();
-  if (!key) throw new Error('ИИ қосылмаған: ✨ терезесінде API кілтін қосыңыз');
+  if (!key) throw new Error('ЖИ қосылмаған: ✨ терезесінде API кілтін қосыңыз');
   let res;
   // A per-minute limit is normal on free tiers: wait for it once instead of failing.
   for (let attempt = 0; ; attempt++) {
@@ -110,10 +110,10 @@ async function chat(messages, fetchImpl = fetch) {
   }
   const body = await res.text();
   if (!res.ok) {
-    if (res.status === 429) throw new Error('ИИ-дің тегін лимиті уақытша бітті. Бір-екі минуттан кейін қайталаңыз.');
+    if (res.status === 429) throw new Error('ЖИ сервисінің тегін лимиті уақытша бітті. Бір-екі минуттан кейін қайталаңыз.');
     if (res.status === 413) throw new Error('Мақалалар тым ұзын болды. Тақырыпты нақтырақ жазыңыз.');
-    if (res.status === 401 || res.status === 403) throw new Error('ИИ кілті қабылданбады. ✨ терезесінде кілтті қайта қосыңыз.');
-    throw new Error(`ИИ сервисінің қатесі (${res.status}). Кейінірек қайталаңыз.`);
+    if (res.status === 401 || res.status === 403) throw new Error('ЖИ кілті қабылданбады. ✨ терезесінде кілтті қайта қосыңыз.');
+    throw new Error(`ЖИ сервисінің қатесі (${res.status}). Кейінірек қайталаңыз.`);
   }
   const content = JSON.parse(body).choices?.[0]?.message?.content || '';
   const json = content.slice(content.indexOf('{'), content.lastIndexOf('}') + 1);
@@ -239,7 +239,7 @@ async function checkKey(key, fetchImpl = fetch) {
     const res = await fetchImpl(`${baseUrl}/models`, { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15000) });
     if (res.ok) return { ok: true };
     if ([400, 401, 403].includes(res.status)) return { ok: false, error: 'Кілт қабылданбады. Оны толық көшіргеніңізді тексеріңіз.' };
-    return { ok: false, error: `ИИ сервисі жауап бермеді (${res.status}). Кейінірек қайталаңыз.` };
+    return { ok: false, error: `ЖИ сервисі жауап бермеді (${res.status}). Кейінірек қайталаңыз.` };
   } catch (err) {
     return { ok: false, error: networkError(err).message };
   }

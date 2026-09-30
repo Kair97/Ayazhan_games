@@ -7,8 +7,8 @@ $('#sound-slot').append(soundToggle());
 leaveGuard = {
   active: () => !!state && state.phase !== 'final',
   ask: () => confirmBox({
-    title: 'Ойыннан шығасыз ба?',
-    text: 'Шықсаңыз, осы ойындағы ұпайларыңыз жойылады.',
+    title: 'Ойыннан шығасың ба?',
+    text: 'Шықсаң, осы ойындағы ұпайларың жойылады.',
     ok: 'Шығу', cancel: 'Ойынға оралу', danger: true,
   }),
   leave: () => { store.del(SESSION_KEY); state = null; return emitAck('player:leave'); },
@@ -50,7 +50,7 @@ $('#join-form').addEventListener('submit', e => {
   $('#join-error').textContent = '';
   socket.timeout(8000).emit('player:join', { pin, name }, (err, r) => {
     btn.disabled = false;
-    if (err) return ($('#join-error').textContent = 'Серверге қосылу мүмкін болмады. Интернетті тексеріңіз.');
+    if (err) return ($('#join-error').textContent = 'Серверге қосылу мүмкін болмады. Интернетті тексер.');
     if (r.error) return ($('#join-error').textContent = r.error);
     store.set(SESSION_KEY, { pin: r.pin, id: r.id });
     store.set(NAME_KEY, r.name);
@@ -204,7 +204,7 @@ function renderResult(s) {
   else if (q.type === 'anagram') title = s.hit ? 'Сөзді таптың!' : 'Қате';
   else title = s.hit ? 'Дұрыс!' : 'Қате';
 
-  if (q.type === 'year') note = [`Дұрыс жауап: ${s.solution}`, none ? '' : ` · сенікі: ${s.answer} (${s.diff} жыл айырма)`];
+  if (q.type === 'year') note = [`Дұрыс жауап: ${s.solution}`, none ? '' : ` · сенікі: ${s.answer} (${s.diff} жыл айырмашылық)`];
   else if (q.type === 'order') note = s.hit ? ['Тарих ретін жақсы білесің'] : [h('ol', { class: 'mini-order' }, ...s.solution.map(t => h('li', {}, t)))];
   else if (q.type === 'anagram') note = [`Дұрыс сөз: ${s.solution}`];
   else note = [s.hit ? (s.streak >= 2 ? `Қатарынан ${s.streak} дұрыс жауап!` : 'Жарайсың, солай жалғастыр') : `Дұрыс жауап: ${q.options[s.solution]}`];
@@ -220,8 +220,8 @@ function renderResult(s) {
   Sound.sfx(s.hit ? 'correct' : 'wrong');
 }
 
-socket.on('player:kicked', () => { store.del(SESSION_KEY); showJoin('Жүргізуші сізді ойыннан шығарды'); });
-socket.on('room:closed', () => { store.del(SESSION_KEY); showJoin('Ойын жабылды. Жаңа PIN-код енгізіңіз.'); $('#pin-input').value = ''; });
+socket.on('player:kicked', () => { store.del(SESSION_KEY); showJoin('Жүргізуші сені ойыннан шығарды'); });
+socket.on('room:closed', () => { store.del(SESSION_KEY); showJoin('Ойын жабылды. Жаңа PIN-код енгіз.'); $('#pin-input').value = ''; });
 
 function leave() {
   socket.emit('player:leave');

@@ -63,18 +63,18 @@ app.post('/api/ai/key', async (req, res) => {
   res.json({ ok: true });
 });
 app.post('/api/ai/generate', async (req, res) => {
-  if (!ai.enabled()) return res.status(503).json({ error: 'ИИ қосылмаған: .env файлына AI_API_KEY жазыңыз' });
+  if (!ai.enabled()) return res.status(503).json({ error: 'ЖИ қосылмаған: .env файлына AI_API_KEY жазыңыз' });
   const now = Date.now();
   const hits = (aiHits.get(req.ip) || []).filter(t => now - t < 3600e3);
   if (hits.length >= 12) return res.status(429).json({ error: 'Бір сағатта 12 квизден көп жасауға болмайды' });
-  if (aiBusy >= 2) return res.status(429).json({ error: 'ИИ қазір бос емес, бір минуттан кейін қайталаңыз' });
+  if (aiBusy >= 2) return res.status(429).json({ error: 'ЖИ қазір бос емес, бір минуттан кейін қайталаңыз' });
   aiHits.set(req.ip, [...hits, now]);
   aiBusy++;
   try {
     res.json(await ai.generateQuiz(req.body || {}));
   } catch (e) {
     console.error('AI generate failed:', e.message);
-    res.status(502).json({ error: e instanceof SyntaxError ? 'ИИ дұрыс емес жауап қайтарды. Қайталап көріңіз.' : e.message });
+    res.status(502).json({ error: e instanceof SyntaxError ? 'ЖИ дұрыс емес жауап қайтарды. Қайталап көріңіз.' : e.message });
   } finally {
     aiBusy--;
   }
@@ -438,8 +438,8 @@ io.on('connection', socket => {
     let p = room.players.get(id);
     if (!p) {
       name = clean(name, 20);
-      if (!name) return reply(ack, { error: 'Есіміңізді жазыңыз' });
-      if ([...room.players.values()].some(o => o.name.toLowerCase() === name.toLowerCase())) return reply(ack, { error: 'Бұл есім бос емес, басқасын таңдаңыз' });
+      if (!name) return reply(ack, { error: 'Есіміңді жаз' });
+      if ([...room.players.values()].some(o => o.name.toLowerCase() === name.toLowerCase())) return reply(ack, { error: 'Бұл есім бос емес, басқасын таңда' });
       if (room.players.size >= MAX_PLAYERS) return reply(ack, { error: 'Ойын толы' });
       p = { id: token(), name, score: 0, streak: 0, answer: null, answerMs: 0, gained: 0, hit: false, team: room.teams ? pickTeam(room) : undefined };
       room.players.set(p.id, p);
@@ -530,7 +530,7 @@ if (require.main === module) {
     console.log('\n  Түрік қағанаты · Бәйге');
     console.log(`  Осы компьютерде:  http://localhost:${PORT}`);
     console.log(lan ? `  Телефондар үшін:  ${lan}  (бір Wi-Fi желісінде)` : '  ⚠ Wi-Fi/LAN табылмады — телефондар қосыла алмайды');
-    console.log(ai.enabled() ? `  ИИ: қосулы (${ai.model()})` : '  ИИ: өшірулі (.env ішінде AI_API_KEY жоқ)');
+    console.log(ai.enabled() ? `  ЖИ: қосулы (${ai.model()})` : '  ЖИ: өшірулі (.env ішінде AI_API_KEY жоқ)');
     console.log('\n  Ойынды тоқтату үшін осы терезені жабыңыз.\n');
     if (process.env.OPEN_BROWSER) openBrowser(`http://localhost:${PORT}/host.html`);
   });

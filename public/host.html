@@ -34,7 +34,7 @@
         <div class="card">
           <h2>Ойындар</h2>
           <div class="packs" id="packs"></div>
-          <button type="button" class="btn btn-ghost btn-block" id="ai-open" style="margin-top:12px" hidden>✨ ИИ-мен жаңа тақырыпқа квиз жасау</button>
+          <button type="button" class="btn btn-ghost btn-block" id="ai-open" style="margin-top:12px" hidden>✨ ЖИ-мен жаңа тақырыпқа квиз жасау</button>
         </div>
         <div class="card">
           <h2>Баптаулар</h2>
@@ -143,25 +143,25 @@
   <!-- AI quiz generator -->
   <dialog id="ai">
     <div class="dlg-head">
-      <h2 style="font-size:20px">✨ ИИ-мен квиз жасау</h2>
+      <h2 style="font-size:20px">✨ ЖИ-мен квиз жасау</h2>
       <form method="dialog"><button class="btn btn-ghost btn-small">Жабу</button></form>
     </div>
     <div class="dlg-body">
       <form id="ai-setup" hidden>
-        <p class="ai-note">ИИ әлі қосылмаған. Бір рет қана жасалады, тегін:</p>
+        <p class="ai-note">Жасанды интеллект (ЖИ) әлі қосылмаған. Бір рет қана бапталады, тегін:</p>
         <ol class="ai-howto">
           <li><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> сайтын ашып, Google аккаунтыңызбен кіріңіз.</li>
           <li><b>Create API key</b> батырмасын басып, пайда болған кілтті көшіріңіз.</li>
           <li>Кілтті төмендегі жолға қойып, «Қосу» батырмасын басыңыз.</li>
         </ol>
-        <p class="hint">Мектептің Wi-Fi желісі Google ИИ-ін бұғаттаса, оның орнына тегін Groq кілтін қолдануға болады: <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a> → <b>Create API Key</b> (кілт <b>gsk_</b> деп басталады).</p>
+        <p class="hint">Мектептің Wi-Fi желісі Google ЖИ сервисін бұғаттаса, оның орнына тегін Groq кілтін қолдануға болады: <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a> → <b>Create API Key</b> (кілт <b>gsk_</b> деп басталады).</p>
         <label class="field">API кілті
           <input class="input" id="ai-key" type="password" autocomplete="off" spellcheck="false" required placeholder="AIza... немесе gsk_...">
         </label>
         <button class="btn btn-block btn-lg" id="ai-key-save">Қосу</button>
       </form>
       <form id="ai-form">
-        <p class="ai-note">ИИ сұрақтарды тек Уикипедия мақалаларынан жасайды. Әр сұрақтың дәлелі (мақаладан алынған нақты сөйлем) тексеріледі, күмәнділері алынып тасталады. Ойнамас бұрын сұрақтарды өзіңіз қарап шығыңыз.</p>
+        <p class="ai-note">ЖИ сұрақтарды тек Уикипедия мақалаларынан жасайды. Әр сұрақтың дәлелі (мақаладан алынған нақты сөйлем) тексеріледі, күмәнділері алынып тасталады. Ойнамас бұрын сұрақтарды өзіңіз қарап шығыңыз.</p>
         <label class="field">Тақырып
           <input class="input" id="ai-topic" maxlength="120" required placeholder="Мысалы: Абылай хан, Қазақ хандығы, Ұлы Жібек жолы">
         </label>
@@ -180,7 +180,7 @@
       </form>
       <ul class="ai-steps" id="ai-steps" hidden>
         <li>Уикипедиядан мақалалар ізделуде</li>
-        <li>ИИ сұрақтар жазуда</li>
+        <li>ЖИ сұрақтар жазуда</li>
         <li>Дәлелдер тексерілуде</li>
       </ul>
       <p class="error" id="ai-error" role="alert"></p>
