@@ -53,10 +53,10 @@ The host types a topic, for example "Абылай хан". The generator then wo
 1. It downloads the matching Wikipedia articles (kk, ru, en).
 2. The LLM writes questions **only from those articles**. Each question must include a verbatim supporting quote.
 3. The server checks that every quote really appears in the article text. A question with an invented quote is dropped.
-4. A second, blind LLM pass answers each question from its quote alone. If it disagrees with the answer key, the question is dropped.
+4. A second, blind LLM pass answers each question from its quote alone. If it disagrees with the answer key, or the question's own wording states a detail the quote doesn't support, the question is dropped.
 5. The host reviews the surviving questions, with a source link for each, and edits them before saving.
 
-To enable it, copy `.env.example` to `.env` and put a free key in `AI_API_KEY` (from [Google AI Studio](https://aistudio.google.com/apikey)). Any OpenAI-compatible provider works via `AI_BASE_URL` and `AI_MODEL` (for example Groq). The endpoint is rate-limited per IP address (12 quizzes per hour) so players on the same Wi-Fi can't drain the quota.
+It works **without any key** on keyless free tiers (Pollinations, then OVHcloud AI Endpoints as backup). That mode is slow and sometimes unavailable, and shared school networks are often throttled. For reliable use, paste a free key in the ✨ dialog: Google Gemini (`AIza…`, [AI Studio](https://aistudio.google.com/apikey)) or Groq (`gsk_…`, [console.groq.com](https://console.groq.com/keys)). The provider is detected from the key. Any other OpenAI-compatible provider works via `AI_BASE_URL` and `AI_MODEL`. The endpoint is rate-limited per IP address (12 quizzes per hour) so players on the same Wi-Fi can't drain the quota.
 
 ## Test
 

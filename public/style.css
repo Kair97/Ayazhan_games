@@ -484,3 +484,5 @@ dialog.confirm .dlg-foot { justify-content: flex-end; }
 .btn-danger:active { box-shadow: 0 1px 0 #8e2c1d; }
 .ai-howto { margin: 12px 0 16px; padding-left: 1.3em; line-height: 1.55; font-weight: 600; }
 .ai-howto a { color: var(--sky); }
+.ai-mode { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--ink-soft); }
+.ai-mode .link { color: var(--sky); padding: 0; }

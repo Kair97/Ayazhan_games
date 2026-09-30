@@ -7,9 +7,13 @@ let joinBase = location.origin;
 let editingId = null;
 let aiEnabled = false;
 let aiCanSetKey = false;
+let aiProvider = 'free';
+let aiShowKey = false;
 
 $('#sound-slot').append(soundToggle());
-fetch('/api/ai/status').then(r => r.json()).then(r => { aiEnabled = r.enabled; aiCanSetKey = r.canSetKey; }).catch(() => {});
+const loadAiStatus = () => fetch('/api/ai/status').then(r => r.json()).then(r => { aiEnabled = r.enabled; aiCanSetKey = r.canSetKey; aiProvider = r.provider; aiProviderName = r.providerName; }).catch(() => {});
+let aiProviderName = '';
+loadAiStatus();
 
 // ---------- boot ----------
 // A control link (host.html?pin=..&key=..) opened on a phone makes it a second remote for the same game.
@@ -475,11 +479,18 @@ async function deleteQuiz(id) {
 let aiDraft = null;
 let aiStepTimers = [];
 
+// Works out of the box on keyless free services; a free personal key makes it faster and reliable.
 function paintAi() {
-  $('#ai-setup').hidden = aiEnabled || !aiCanSetKey;
-  $('#ai-form').hidden = !aiEnabled;
-  $('#ai-error').textContent = aiEnabled || aiCanSetKey ? '' : 'ЖИ әлі қосылмаған. Оны ойын іске қосылған компьютерде ✨ батырмасы арқылы қосыңыз.';
+  const free = aiProvider === 'free';
+  $('#ai-setup').hidden = !(aiShowKey && aiCanSetKey);
+  $('#ai-form').hidden = aiShowKey && aiCanSetKey;
+  $('#ai-error').textContent = '';
+  $('#ai-mode').replaceChildren(
+    free ? 'Қазір: тегін кілтсіз режим. Баяу жұмыс істейді (2–4 минут) және кейде уақытша істемей қалуы мүмкін. ' : `ЖИ: ${aiProviderName}. `,
+    aiCanSetKey ? h('button', { type: 'button', class: 'link', onclick: () => { aiShowKey = true; paintAi(); $('#ai-key').focus(); } }, free ? 'Өз тегін кілтімді қосу' : 'Кілтті ауыстыру') : '');
 }
+
+$('#ai-key-back').addEventListener('click', () => { aiShowKey = false; paintAi(); });
 
 $('#ai-open').addEventListener('click', () => {
   paintAi();
@@ -497,8 +508,9 @@ $('#ai-setup').addEventListener('submit', async e => {
     const res = await fetch('/api/ai/key', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: $('#ai-key').value }) });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Қате');
-    aiEnabled = true;
     $('#ai-key').value = '';
+    aiShowKey = false;
+    await loadAiStatus();
     paintAi();
     $('#ai-topic').focus();
   } catch (err) {

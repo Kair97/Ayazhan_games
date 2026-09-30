@@ -10,12 +10,17 @@ const UA = 'BaigeQuiz/1.0 (classroom quiz generator; https://github.com/Kair97/A
 const LANGS = ['kk', 'ru', 'en'];
 
 // The provider is recognised from the key, so a host only ever pastes a key.
+// No key at all -> Pollinations' anonymous tier (GPT-OSS 20B, no signup), so the generator works out of the box.
 // sourceChars = article text per language sent to the model; Groq's free tier allows ~8k tokens/minute.
 const PROVIDERS = {
-  gemini: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash', sourceChars: 14000 },
-  groq: { baseUrl: 'https://api.groq.com/openai/v1', model: 'openai/gpt-oss-120b', sourceChars: 3500 },
+  free: { baseUrl: 'https://text.pollinations.ai/openai', model: 'openai-fast', sourceChars: 6000, batch: 3, lowReasoning: null, minGapMs: 16000, retries: 2, name: 'Тегін кілтсіз режим (Pollinations / OVHcloud)' },
+  // OVHcloud AI Endpoints: official anonymous tier, 2 requests/minute per IP and model. Backup for keyless mode.
+  ovh: { baseUrl: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1', model: 'gpt-oss-120b', sourceChars: 6000, batch: 3, lowReasoning: null, minGapMs: 31000, retries: 1, name: 'OVHcloud' },
+  gemini: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash', sourceChars: 14000, batch: 20, lowReasoning: 'param', retries: 1, name: 'Google Gemini' },
+  groq: { baseUrl: 'https://api.groq.com/openai/v1', model: 'openai/gpt-oss-120b', sourceChars: 3500, batch: 6, lowReasoning: 'param', retries: 1, name: 'Groq' },
 };
-const providerOf = key => (key.startsWith('gsk_') ? 'groq' : 'gemini');
+const KEYLESS = [PROVIDERS.free, PROVIDERS.ovh];
+const providerOf = key => (!key ? 'free' : key.startsWith('gsk_') ? 'groq' : 'gemini');
 
 function config() {
   const key = process.env.AI_API_KEY || '';
@@ -24,9 +29,14 @@ function config() {
   return {
     key,
     provider: custom ? 'custom' : providerOf(key),
+    name: custom ? process.env.AI_BASE_URL : preset.name,
     baseUrl: (process.env.AI_BASE_URL || preset.baseUrl).replace(/\/$/, ''),
     model: process.env.AI_MODEL || preset.model,
     sourceChars: Number(process.env.AI_SOURCE_CHARS) || (custom ? 8000 : preset.sourceChars),
+    batch: custom ? 8 : preset.batch,
+    lowReasoning: custom ? null : preset.lowReasoning,
+    minGapMs: custom ? 0 : preset.minGapMs || 0,
+    retries: custom ? 1 : preset.retries,
   };
 }
 
@@ -88,36 +98,63 @@ async function findSources(topic, fetchImpl = fetch) {
 }
 
 // ---------- LLM ----------
-async function chat(messages, fetchImpl = fetch) {
-  const { key, baseUrl, model } = config();
-  if (!key) throw new Error('ЖИ қосылмаған: ✨ терезесінде API кілтін қосыңыз');
+// Pacing clocks per endpoint: free tiers count from the end of the previous answer.
+const lastCallAt = new Map(); // ponytail: process-wide clocks; fine for one classroom server
+
+// One provider: pace, call, retry temporary refusals, parse the JSON reply.
+async function callProvider(p, key, messages, fetchImpl) {
+  const gap = (lastCallAt.get(p.baseUrl) || 0) + (p.minGapMs || 0) - Date.now();
+  if (gap > 0) await sleep(gap);
   let res;
-  // A per-minute limit is normal on free tiers: wait for it once instead of failing.
   for (let attempt = 0; ; attempt++) {
     try {
-      res = await fetchImpl(`${baseUrl}/chat/completions`, {
+      res = await fetchImpl(`${p.baseUrl}/chat/completions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-        body: JSON.stringify({ model, messages, temperature: 0.2, response_format: { type: 'json_object' } }),
+        headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) },
+        // Short reasoning where allowed: the task is extraction from given text. Free tiers refuse reasoning control (402).
+        body: JSON.stringify({ model: p.model, messages, temperature: 0.2, ...(p.lowReasoning === 'param' ? { reasoning_effort: 'low' } : {}), response_format: { type: 'json_object' } }),
         signal: AbortSignal.timeout(120000),
       });
     } catch (err) {
+      lastCallAt.set(p.baseUrl, Date.now());
       throw networkError(err);
     }
-    if (res.status !== 429 || attempt >= 1) break;
-    const wait = Math.min(60, Number(res.headers.get('retry-after')) || 20);
-    await sleep(wait * 1000);
+    // 429 = per-minute limit; 402 = anonymous quota (refills within a minute); 5xx = temporary outage.
+    const retryable = [429, 402].includes(res.status) || res.status >= 500;
+    if (!retryable || attempt >= p.retries) break;
+    lastCallAt.set(p.baseUrl, Date.now());
+    await sleep(1000 * Math.min(60, Number(res.headers.get('retry-after')) || (res.status === 402 ? 30 : res.status >= 500 ? 10 : 20)));
   }
   const body = await res.text();
+  lastCallAt.set(p.baseUrl, Date.now());
   if (!res.ok) {
-    if (res.status === 429) throw new Error('ЖИ сервисінің тегін лимиті уақытша бітті. Бір-екі минуттан кейін қайталаңыз.');
-    if (res.status === 413) throw new Error('Мақалалар тым ұзын болды. Тақырыпты нақтырақ жазыңыз.');
-    if (res.status === 401 || res.status === 403) throw new Error('ЖИ кілті қабылданбады. ✨ терезесінде кілтті қайта қосыңыз.');
-    throw new Error(`ЖИ сервисінің қатесі (${res.status}). Кейінірек қайталаңыз.`);
+    const err = new Error(
+      res.status === 429 || res.status === 402 ? 'ЖИ сервисінің тегін лимиті уақытша бітті. Бір-екі минуттан кейін қайталаңыз.'
+        : res.status === 413 ? 'Мақалалар тым ұзын болды. Тақырыпты нақтырақ жазыңыз.'
+          : res.status === 401 || res.status === 403 ? 'ЖИ кілті қабылданбады. ✨ терезесінде кілтті қайта қосыңыз.'
+            : `ЖИ сервисінің қатесі (${res.status}). Кейінірек қайталаңыз.`);
+    err.status = res.status;
+    throw err;
   }
   const content = JSON.parse(body).choices?.[0]?.message?.content || '';
   const json = content.slice(content.indexOf('{'), content.lastIndexOf('}') + 1);
+  if (!json) throw new Error('ЖИ жауабы толық келмеді. Қайталап көріңіз.');
   return JSON.parse(json);
+}
+
+// With a key: that provider. Without one: the keyless free services in turn, then a clear "add a key" message.
+async function chat(messages, fetchImpl = fetch) {
+  const c = config();
+  if (c.key || c.provider === 'custom') return callProvider(c, c.key, messages, fetchImpl);
+  let lastErr;
+  for (const p of KEYLESS) {
+    try {
+      return await callProvider(p, '', messages, fetchImpl);
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw new Error(`Тегін кілтсіз ЖИ сервистері қазір жауап бермей тұр (${lastErr?.message || 'қате'}). Сенімді жұмыс үшін ✨ терезесінде тегін кілт қосыңыз.`);
 }
 
 const LANG_NAME = { kk: 'Kazakh (Cyrillic script)', ru: 'Russian' };
@@ -127,7 +164,7 @@ const LEVEL = {
   hard: 'hard: precise details (names, numbers, places) that are still clearly stated',
 };
 
-function writerPrompt({ topic, count, lang, level }, sources) {
+function writerPrompt({ topic, n, lang, level }, sources, avoid = []) {
   const src = sources.map(s => `### ${s.id} (${s.lang}) ${s.title}\n${s.text}`).join('\n\n');
   return [
     {
@@ -147,7 +184,10 @@ RULES:
 - Every question must be about a different fact.
 Return JSON: {"questions":[{"text":"","options":["",""],"correct":0,"fact":"","source":"S1","quote":""}]}`,
     },
-    { role: 'user', content: `TOPIC: ${topic}\nWrite ${Math.ceil(count * 1.6)} questions.\n\nSOURCES:\n${src}` },
+    {
+      role: 'user',
+      content: `TOPIC: ${topic}\nWrite ${n} questions.${avoid.length ? `\nDo NOT repeat these already written questions or their facts:\n- ${avoid.join('\n- ')}` : ''}\n\nSOURCES:\n${src}`,
+    },
   ];
 }
 
@@ -160,8 +200,9 @@ function checkerPrompt(items) {
 Using ONLY the quote (and general knowledge only to judge ambiguity), answer:
 - "answer": index of the option the quote proves correct, or -1 if the quote does not prove any option.
 - "unambiguous": true only if exactly one option can be correct and the question is clear to a student.
-- "issue": short reason when answer is -1 or unambiguous is false, else "".
-Return JSON: {"results":[{"id":0,"answer":0,"unambiguous":true,"issue":""}]}`,
+- "question_supported": true only if EVERY fact stated in the question text itself (names, relatives, numbers, places, dates) matches the quote exactly. A wrong detail in the question (e.g. "grandfather" when the quote says "father") makes it false.
+- "issue": short reason when answer is -1, unambiguous is false or question_supported is false, else "".
+Return JSON: {"results":[{"id":0,"answer":0,"unambiguous":true,"question_supported":true,"issue":""}]}`,
     },
     { role: 'user', content: JSON.stringify(items.map((q, id) => ({ id, quote: q.quote, question: q.text, options: q.options }))) },
   ];
@@ -169,10 +210,24 @@ Return JSON: {"results":[{"id":0,"answer":0,"unambiguous":true,"issue":""}]}`,
 
 const clean = (s, max) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 
+// Verbatim check, tolerant only of FORMATTING: trailing punctuation, and "..." where every fragment is
+// word-for-word in the article (>=5 chars each, >=20 in total), in order, with at most 80 skipped characters between them.
+function quoteInSource(quote, sourceNorm) {
+  const parts = normalize(quote).split(/\s*(?:\.\.\.|…)\s*/).map(p => p.replace(/[.,;:!?]+$/, '').trim()).filter(Boolean);
+  if (!parts.length || parts.some(p => p.length < 5) || parts.join('').length < 20) return false;
+  let from = 0;
+  for (const [i, part] of parts.entries()) {
+    const at = sourceNorm.indexOf(part, from);
+    if (at < 0 || (i > 0 && at - from > 80)) return false;
+    from = at + part.length;
+  }
+  return true;
+}
+
 // Structure + verbatim-quote check. Returns { kept, dropped:[{text, reason}] }.
-function verifyQuotes(questions, sources) {
+function verifyQuotes(questions, sources, already = []) {
   const byId = Object.fromEntries(sources.map(s => [s.id, { ...s, norm: normalize(s.text) }]));
-  const kept = [], dropped = [], seen = new Set();
+  const kept = [], dropped = [], seen = new Set(already.map(t => t.toLowerCase()));
   for (const raw of Array.isArray(questions) ? questions : []) {
     const q = {
       text: clean(raw?.text, 200),
@@ -189,7 +244,7 @@ function verifyQuotes(questions, sources) {
       !Number.isInteger(q.correct) || !q.options[q.correct] ? 'дұрыс жауап белгіленбеген' :
       !q.source ? 'дереккөзі белгісіз' :
       normalize(q.quote).length < 20 ? 'дәлел-сөйлем тым қысқа' :
-      !q.source.norm.includes(normalize(q.quote)) ? 'дәлел-сөйлем мақалада жоқ (ойдан шығарылуы мүмкін)' :
+      !quoteInSource(q.quote, q.source.norm) ? 'дәлел-сөйлем мақалада жоқ (ойдан шығарылуы мүмкін)' :
       seen.has(q.text.toLowerCase()) ? 'сұрақ қайталанады' : '';
     if (why) { dropped.push({ text: q.text, reason: why }); continue; }
     seen.add(q.text.toLowerCase());
@@ -210,18 +265,38 @@ async function generateQuiz({ topic, count = 10, lang = 'kk', level = 'medium' }
   const sources = await (deps.findSources || findSources)(topic, fetchImpl);
   if (!sources.length) throw new Error('Бұл тақырып бойынша Уикипедиядан мақала табылмады. Тақырыпты басқаша жазып көріңіз.');
 
-  const draft = await llm(writerPrompt({ topic, count, lang, level }, sources));
-  const { kept, dropped } = verifyQuotes(draft.questions, sources);
+  // Writer in batches (small reply limits on free tiers); each batch is told what already exists.
+  const per = deps.batch || config().batch;
+  const need = Math.ceil(count * 1.6);
+  const kept = [], dropped = [];
+  for (let round = 0; round < 5 && kept.length < need; round++) {
+    let draft;
+    try {
+      draft = await llm(writerPrompt({ topic, n: Math.min(per, need - kept.length), lang, level }, sources, kept.map(q => q.text)));
+    } catch (err) {
+      if (!kept.length) throw err;
+      break; // keep what the earlier batches produced
+    }
+    const v = verifyQuotes(draft.questions, sources, kept.map(q => q.text));
+    kept.push(...v.kept);
+    dropped.push(...v.dropped);
+    if (!v.kept.length && round > 0) break; // the model has run out of new facts
+  }
 
-  let final = kept;
-  if (kept.length) {
-    const verdict = await llm(checkerPrompt(kept));
+  // Blind checker, also batched.
+  const final = [];
+  for (let i = 0; i < kept.length; i += per * 2) {
+    const chunk = kept.slice(i, i + per * 2);
+    const verdict = await llm(checkerPrompt(chunk));
     const results = new Map((verdict.results || []).map(r => [r.id, r]));
-    final = kept.filter((q, id) => {
+    chunk.forEach((q, id) => {
       const r = results.get(id);
-      const ok = r && r.answer === q.correct && r.unambiguous === true;
-      if (!ok) dropped.push({ text: q.text, reason: r ? `тексеруші: ${r.answer === q.correct ? 'сұрақ екіұшты' : 'дәлел басқа жауапты көрсетеді'}${r.issue ? ` (${r.issue})` : ''}` : 'тексеруші жауап бермеді' });
-      return ok;
+      const ok = r && r.answer === q.correct && r.unambiguous === true && r.question_supported === true;
+      const why = !r ? 'тексеруші жауап бермеді'
+        : r.answer !== q.correct ? 'дәлел басқа жауапты көрсетеді'
+          : r.question_supported !== true ? 'сұрақтың өз мәтінінде дәлелге сәйкес келмейтін дерек бар' : 'сұрақ екіұшты';
+      if (ok) final.push(q);
+      else dropped.push({ text: q.text, reason: `тексеруші: ${why}${r?.issue ? ` (${r.issue})` : ''}` });
     });
   }
   return {
@@ -245,4 +320,4 @@ async function checkKey(key, fetchImpl = fetch) {
   }
 }
 
-module.exports = { checkKey, generateQuiz, verifyQuotes, normalize, findSources, enabled: () => !!config().key, model: () => config().model, provider: () => config().provider };
+module.exports = { quoteInSource, checkKey, generateQuiz, verifyQuotes, normalize, findSources, enabled: () => true, model: () => config().model, provider: () => config().provider, providerName: () => config().name };

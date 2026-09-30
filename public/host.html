@@ -148,7 +148,7 @@
     </div>
     <div class="dlg-body">
       <form id="ai-setup" hidden>
-        <p class="ai-note">Жасанды интеллект (ЖИ) әлі қосылмаған. Бір рет қана бапталады, тегін:</p>
+        <p class="ai-note">Өз тегін кілтіңізді қосыңыз: ЖИ жылдамырақ әрі сенімдірек жұмыс істейді. Бір рет қана жасалады:</p>
         <ol class="ai-howto">
           <li><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> сайтын ашып, Google аккаунтыңызбен кіріңіз.</li>
           <li><b>Create API key</b> батырмасын басып, пайда болған кілтті көшіріңіз.</li>
@@ -159,8 +159,10 @@
           <input class="input" id="ai-key" type="password" autocomplete="off" spellcheck="false" required placeholder="AIza... немесе gsk_...">
         </label>
         <button class="btn btn-block btn-lg" id="ai-key-save">Қосу</button>
+        <button type="button" class="link" id="ai-key-back" style="margin-top:10px">← Кілтсіз жалғастыру</button>
       </form>
       <form id="ai-form">
+        <p class="ai-mode" id="ai-mode"></p>
         <p class="ai-note">ЖИ сұрақтарды тек Уикипедия мақалаларынан жасайды. Әр сұрақтың дәлелі (мақаладан алынған нақты сөйлем) тексеріледі, күмәнділері алынып тасталады. Ойнамас бұрын сұрақтарды өзіңіз қарап шығыңыз.</p>
         <label class="field">Тақырып
           <input class="input" id="ai-topic" maxlength="120" required placeholder="Мысалы: Абылай хан, Қазақ хандығы, Ұлы Жібек жолы">

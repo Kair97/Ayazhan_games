@@ -45,7 +45,7 @@ app.get('/qr.svg', async (req, res) => {
 const aiHits = new Map();
 let aiBusy = 0;
 const isLocal = req => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
-app.get('/api/ai/status', (req, res) => res.json({ enabled: ai.enabled(), model: ai.model(), canSetKey: isLocal(req) }));
+app.get('/api/ai/status', (req, res) => res.json({ enabled: ai.enabled(), provider: ai.provider(), providerName: ai.providerName(), model: ai.model(), canSetKey: isLocal(req) }));
 
 // The host pastes the key in the game instead of editing .env by hand. Only from the computer running the game.
 app.post('/api/ai/key', async (req, res) => {
@@ -63,7 +63,6 @@ app.post('/api/ai/key', async (req, res) => {
   res.json({ ok: true });
 });
 app.post('/api/ai/generate', async (req, res) => {
-  if (!ai.enabled()) return res.status(503).json({ error: 'ЖИ қосылмаған: .env файлына AI_API_KEY жазыңыз' });
   const now = Date.now();
   const hits = (aiHits.get(req.ip) || []).filter(t => now - t < 3600e3);
   if (hits.length >= 12) return res.status(429).json({ error: 'Бір сағатта 12 квизден көп жасауға болмайды' });
@@ -530,7 +529,7 @@ if (require.main === module) {
     console.log('\n  Түрік қағанаты · Бәйге');
     console.log(`  Осы компьютерде:  http://localhost:${PORT}`);
     console.log(lan ? `  Телефондар үшін:  ${lan}  (бір Wi-Fi желісінде)` : '  ⚠ Wi-Fi/LAN табылмады — телефондар қосыла алмайды');
-    console.log(ai.enabled() ? `  ЖИ: қосулы (${ai.model()})` : '  ЖИ: өшірулі (.env ішінде AI_API_KEY жоқ)');
+    console.log(`  ЖИ: ${ai.providerName()} · ${ai.model()}`);
     console.log('\n  Ойынды тоқтату үшін осы терезені жабыңыз.\n');
     if (process.env.OPEN_BROWSER) openBrowser(`http://localhost:${PORT}/host.html`);
   });

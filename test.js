@@ -225,24 +225,34 @@ server.listen(0, async () => {
     const draft = { questions: [
       { text: 'Абылай хан қай жылы туған?', options: ['1711', '1725', '1693', '1740'], correct: 0, fact: 'f', source: 'S1', quote: 'Абылай хан 1711 жылы туған.' },
       { text: 'Абылай хан қай жылы хан болды?', options: ['1771', '1760'], correct: 0, fact: 'f', source: 'S1', quote: 'Ол 1771 жылы Түркістанда хан болып сайланды.' },
+      { text: 'Абылай хан атасы қайтқан соң қай жылы хан болды?', options: ['1771', '1765'], correct: 0, fact: 'f', source: 'S1', quote: 'Ол 1771 жылы Түркістанда хан болып сайланды.' }, // right answer, wrong detail in the question
       { text: 'Абылай ханның лақабы?', options: ['Сұлтан', 'Батыр'], correct: 0, fact: 'f', source: 'S1', quote: 'Абылай хан Сұлтан деп аталған.' }, // invented quote
       { text: 'Абылай хан қай жылы қайтыс болды?', options: ['1781', '1790'], correct: 1, fact: 'f', source: 'S1', quote: 'Абылай хан 1781 жылы қайтыс болды.' }, // wrong answer key
       { text: 'Бос', options: ['a', 'a'], correct: 0, source: 'S1', quote: 'Абылай хан 1711 жылы туған.' }, // duplicate options
     ] };
-    const calls = [];
+    let writerCalls = 0;
     const fakeChat = async messages => {
-      calls.push(messages);
-      if (calls.length === 1) return draft;
+      if (!messages[0].content.includes('fact-checker')) return writerCalls++ === 0 ? draft : { questions: [] };
       const items = JSON.parse(messages[1].content);
       assert.ok(items.every(it => !('correct' in it)), 'checker must not see the marked answer');
-      return { results: items.map(it => ({ id: it.id, answer: it.options.findIndex(o => it.quote.includes(o)), unambiguous: true, issue: '' })) };
+      // honest checker; it also flags a question whose own wording contradicts the quote
+      return { results: items.map(it => ({ id: it.id, answer: it.options.findIndex(o => it.quote.includes(o)), unambiguous: true, question_supported: !it.question.includes('атасы'), issue: '' })) };
     };
     const out = await generateQuiz({ topic: 'Абылай хан', count: 5 }, { chat: fakeChat, findSources: async () => SRC });
     assert.deepStrictEqual(out.questions.map(q => q.text), ['Абылай хан қай жылы туған?', 'Абылай хан қай жылы хан болды?']);
     assert.ok(out.dropped.some(d => /мақалада жоқ/.test(d.reason)), 'invented quote is dropped');
     assert.ok(out.dropped.some(d => /басқа жауап/.test(d.reason)), 'wrong answer key is dropped by the checker');
     assert.ok(out.dropped.some(d => /қайталанады/.test(d.reason)), 'duplicate options are dropped');
+    assert.ok(out.dropped.some(d => /сұрақтың өз мәтінінде/.test(d.reason)), 'a wrong detail in the question text is dropped');
     assert.strictEqual(out.questions[0].source.url, SRC[0].url);
+    // quote matching tolerates formatting only: trailing punctuation and "..." over a short skipped span
+    const { quoteInSource, normalize } = require('./ai');
+    const art = normalize('Kul Tigin (Old Turkic: kül tigin; 684 – 731) was a general and a prince of the Second Turkic Khaganate, and a son of Ilterish.');
+    assert.ok(quoteInSource('Kul Tigin ... was a general and a prince of the Second Turkic Khaganate.', art), 'ellipsis over a short parenthetical');
+    assert.ok(quoteInSource('was a general and a prince of the Second Turkic Khaganate.', art), 'trailing full stop where the sentence continues');
+    assert.ok(!quoteInSource('Kul Tigin ... was a famous poet of the Second Turkic Khaganate.', art), 'invented fragment rejected');
+    assert.ok(!quoteInSource('Kul Tigin ... a son of Ilterish.', normalize('Kul Tigin' + ' x'.repeat(100) + ' a son of Ilterish.')), 'long skipped span rejected');
+    assert.ok(!quoteInSource('a son ... Ilterish', art), 'tiny fragments rejected');
     // quote matching tolerates case, spacing and quote-mark differences
     assert.strictEqual(verifyQuotes([{ text: 't', options: ['a', 'b'], correct: 0, source: 'S1', quote: '  абылай ХАН «1711»   жылы туған. ' }], SRC).kept.length, 1);
 
